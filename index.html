@@ -1,1 +1,52 @@
-Hello, world.
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Place Value Regrouping</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="build">
+      <label for="numberInput">Build number:</label>
+      <input id="numberInput" type="number" min="0" max="999" value="0" />
+      <button id="buildBtn">Build</button>
+    </div>
+
+    <div class="modes">
+      <button id="composeBtn" class="active">Compose</button>
+      <button id="decomposeBtn">Decompose</button>
+      <span id="lockBadge" class="lock-badge hidden">Animating…</span>
+    </div>
+
+    <div class="readout">
+      <div id="valueText" class="value-text">0 hundreds, 0 tens, 0 ones</div>
+      <div id="helpText" class="help-text">
+        Compose: click a full frame. Decompose: click a ten-stick or a hundred.
+      </div>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="panel">
+      <h2>Hundreds</h2>
+      <div id="hundredsArea" class="hundreds-area"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Tens</h2>
+      <div id="tensFrames" class="frames"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Ones</h2>
+      <div id="onesFrames" class="frames"></div>
+    </section>
+  </main>
+
+  <div id="animLayer" class="anim-layer" aria-hidden="true"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>
