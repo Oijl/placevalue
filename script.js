@@ -1,15 +1,15 @@
-// Implements fixes:
-// - Canonical repacking of tens frames after any tens-changing action
-//   so 34 tens always displays as 10+10+10+4 (not 9/9/9/7).
-// - Repacking is animated via existing FLIP (cube-level), so sticks slide instead of snapping.
-
 const els = {
   numberInput: document.getElementById('numberInput'),
   buildBtn: document.getElementById('buildBtn'),
   composeBtn: document.getElementById('composeBtn'),
   decomposeBtn: document.getElementById('decomposeBtn'),
   lockBadge: document.getElementById('lockBadge'),
-  valueText: document.getElementById('valueText'),
+
+  standardText: document.getElementById('standardText'),
+  htoText: document.getElementById('htoText'),
+  expandedText: document.getElementById('expandedText'),
+  actionText: document.getElementById('actionText'),
+
   helpText: document.getElementById('helpText'),
   onesFrames: document.getElementById('onesFrames'),
   tensFrames: document.getElementById('tensFrames'),
@@ -24,11 +24,9 @@ const state = {
   nextCubeId: 1,
   nextStickId: 1,
   nextHundredId: 1,
-
-  // Explicit frame structure:
-  onesFrames: [],      // Cube[][]
-  tensFrames: [],      // Stick[][]
-  hundreds: [],        // {id, sticks: Stick[10]}[]
+  onesFrames: [],
+  tensFrames: [],
+  hundreds: [],
 };
 
 function setLocked(v){
@@ -44,10 +42,11 @@ function setMode(m){
   mode = m;
   els.composeBtn.classList.toggle('active', mode === 'compose');
   els.decomposeBtn.classList.toggle('active', mode === 'decompose');
+
   els.helpText.textContent =
     mode === 'compose'
-      ? 'Compose: click a full frame.'
-      : 'Decompose: click a ten-stick or a hundred.';
+      ? 'Compose: hover a full frame, then click it.'
+      : 'Decompose: hover a ten-stick or a hundred, then click it.';
 }
 
 els.composeBtn.addEventListener('click', () => { if(!locked) setMode('compose'); });
@@ -100,7 +99,6 @@ function flattenCubes(){
 }
 
 function flattenTensSticks(){
-  // Canonical order: frame order, then slot order
   const sticks = [];
   for(const frame of state.tensFrames){
     for(const st of frame) sticks.push(st);
@@ -109,8 +107,6 @@ function flattenTensSticks(){
 }
 
 function canonicalizeTensFrames(){
-  // Treat frames as DISPLAY ONLY.
-  // Pack sticks as full frames as possible: 10,10,10,4...
   const sticks = flattenTensSticks();
   state.tensFrames = chunk(sticks, 10);
   if(state.tensFrames.length === 0) state.tensFrames = [[]];
@@ -123,12 +119,52 @@ function countValue(){
   return { hundreds, tens, ones };
 }
 
-function updateReadout(){
-  const { hundreds, tens, ones } = countValue();
-  els.valueText.textContent = `${hundreds} hundreds, ${tens} tens, ${ones} ones`;
+function totalValue(){
+  return flattenCubes().length;
 }
 
-// ---------- Build (no animation) ----------
+// ---------- Prominent display ----------
+function updateReadout(){
+  const { hundreds, tens, ones } = countValue();
+  const total = totalValue();
+
+  els.standardText.textContent = String(total);
+  els.htoText.textContent = `${hundreds} hundreds, ${tens} tens, ${ones} ones`;
+
+  const a = hundreds * 100;
+  const b = tens * 10;
+  const c = ones;
+  els.expandedText.textContent = `${a} + ${b} + ${c}`;
+}
+
+// ---------- Action banner (color-coded) ----------
+let actionTimer1 = null;
+let actionTimer2 = null;
+
+function showAction(text, kind){
+  if(actionTimer1) window.clearTimeout(actionTimer1);
+  if(actionTimer2) window.clearTimeout(actionTimer2);
+
+  els.actionText.textContent = text;
+
+  els.actionText.classList.remove('hidden', 'fading', 'compose', 'decompose');
+  if(kind === 'compose') els.actionText.classList.add('compose');
+  if(kind === 'decompose') els.actionText.classList.add('decompose');
+
+  // time for a 2nd grader to read
+  const lingerMs = 2800;
+  const fadeMs = 800;
+
+  actionTimer1 = window.setTimeout(() => {
+    els.actionText.classList.add('fading');
+    actionTimer2 = window.setTimeout(() => {
+      els.actionText.classList.add('hidden');
+      els.actionText.classList.remove('fading');
+    }, fadeMs + 40);
+  }, lingerMs);
+}
+
+// ---------- Build ----------
 function buildNumber(n){
   const current = flattenCubes().sort((a,b)=>a.id-b.id);
 
@@ -153,7 +189,6 @@ function buildNumber(n){
 
   let idx = 0;
 
-  // Hundreds
   for(let i=0;i<h;i++){
     const sticks = [];
     for(let s=0;s<10;s++){
@@ -164,7 +199,6 @@ function buildNumber(n){
     state.hundreds.push(makeHundred(sticks));
   }
 
-  // Tens
   const tensSticks = [];
   for(let i=0;i<t;i++){
     const cubes = current.slice(idx, idx+10);
@@ -174,7 +208,6 @@ function buildNumber(n){
   state.tensFrames = chunk(tensSticks, 10);
   canonicalizeTensFrames();
 
-  // Ones
   const onesCubes = current.slice(idx, idx+o);
   state.onesFrames = chunk(onesCubes, 10);
   if(state.onesFrames.length === 0) state.onesFrames = [[]];
@@ -203,21 +236,28 @@ function renderOnesFrames(){
     for(let i=0;i<10;i++){
       const slot = document.createElement('div');
       slot.className = 'slot';
-      slot.dataset.kind = 'one-slot';
-      slot.dataset.frameIndex = String(frameIndex);
-      slot.dataset.slotIndex = String(i);
       frameEl.appendChild(slot);
       slots.push(slot);
     }
-
     for(let i=0;i<frameCubes.length;i++){
       slots[i].appendChild(frameCubes[i].el);
     }
+
+    frameEl.addEventListener('mouseenter', () => {
+      if(locked) return;
+      if(mode !== 'compose') return;
+      if(frameCubes.length !== 10) return;
+      frameEl.classList.add('preview-compose');
+    });
+    frameEl.addEventListener('mouseleave', () => {
+      frameEl.classList.remove('preview-compose');
+    });
 
     frameEl.addEventListener('click', () => {
       if(locked) return;
       if(mode !== 'compose') return;
       if(frameCubes.length !== 10) return;
+      showAction('Composing 10 ones into 1 ten.', 'compose');
       composeOnesFrameToTen(frameIndex);
     });
 
@@ -238,9 +278,6 @@ function renderTensFrames(){
     for(let i=0;i<10;i++){
       const slot = document.createElement('div');
       slot.className = 'ten-slot';
-      slot.dataset.kind = 'ten-slot';
-      slot.dataset.frameIndex = String(frameIndex);
-      slot.dataset.slotIndex = String(i);
       frameEl.appendChild(slot);
       slots.push(slot);
     }
@@ -250,10 +287,21 @@ function renderTensFrames(){
       slots[i].appendChild(stickEl);
     }
 
+    frameEl.addEventListener('mouseenter', () => {
+      if(locked) return;
+      if(mode !== 'compose') return;
+      if(frameSticks.length !== 10) return;
+      frameEl.classList.add('preview-compose');
+    });
+    frameEl.addEventListener('mouseleave', () => {
+      frameEl.classList.remove('preview-compose');
+    });
+
     frameEl.addEventListener('click', () => {
       if(locked) return;
       if(mode !== 'compose') return;
       if(frameSticks.length !== 10) return;
+      showAction('Composing 10 tens into 1 hundred.', 'compose');
       composeTensFrameToHundred(frameIndex);
     });
 
@@ -274,9 +322,20 @@ function renderHundreds(){
       hundredEl.appendChild(stickEl);
     }
 
+    hundredEl.addEventListener('mouseenter', () => {
+      if(locked) return;
+      if(mode !== 'decompose') return;
+      hundredEl.classList.add('preview-decompose');
+    });
+    hundredEl.addEventListener('mouseleave', () => {
+      hundredEl.classList.remove('preview-decompose');
+    });
+
+    // ✅ now the green hundred itself is clickable (clicks bubble here)
     hundredEl.addEventListener('click', () => {
       if(locked) return;
       if(mode !== 'decompose') return;
+      showAction('Decomposing 1 hundred into 10 tens.', 'decompose');
       decomposeHundredToTens(hundred.id);
     });
 
@@ -294,8 +353,6 @@ function createTenStickElement(stick, { inHundred }){
   for(let i=0;i<10;i++){
     const slot = document.createElement('div');
     slot.className = 'slot';
-    slot.dataset.kind = 'ten-cube-slot';
-    slot.dataset.slotIndex = String(i);
     stickEl.appendChild(slot);
     slots.push(slot);
   }
@@ -303,18 +360,39 @@ function createTenStickElement(stick, { inHundred }){
     slots[i].appendChild(stick.cubes[i].el);
   }
 
-  stickEl.addEventListener('click', (ev) => {
-    ev.stopPropagation();
+  // Hover preview only for decomposable tens (not inside a hundred)
+  stickEl.addEventListener('mouseenter', () => {
     if(locked) return;
     if(mode !== 'decompose') return;
     if(stickEl.dataset.inHundred === 'true') return;
+    stickEl.classList.add('preview-decompose');
+  });
+  stickEl.addEventListener('mouseleave', () => {
+    stickEl.classList.remove('preview-decompose');
+  });
+
+  stickEl.addEventListener('click', (ev) => {
+    // ✅ CRITICAL FIX:
+    // Only stop propagation if this stick is actually decomposable.
+    // If it's inside a hundred, let it bubble so the hundred can be clicked.
+    if(stickEl.dataset.inHundred === 'true') return;
+
+    ev.stopPropagation();
+    if(locked) return;
+    if(mode !== 'decompose') return;
+
+    showAction('Decomposing 1 ten into 10 ones.', 'decompose');
     decomposeTenToOnes(stick.id);
   });
 
   return stickEl;
 }
 
-// ---------- Animation helpers ----------
+/* ---------- Animation + regrouping logic ----------
+   Keep your existing animation helpers + actions BELOW this line.
+   (No changes needed there for this bugfix + color system.)
+*/
+
 function rectOf(el){
   const r = el.getBoundingClientRect();
   return { left: r.left, top: r.top, width: r.width, height: r.height };
@@ -330,7 +408,6 @@ function captureCubeRects(){
 
 function playFlip(before, after, excludeIds = new Set(), durationMs = 260){
   const anims = [];
-
   for(const [id, b] of before.entries()){
     if(excludeIds.has(id)) continue;
     const a = after.get(id);
@@ -347,7 +424,6 @@ function playFlip(before, after, excludeIds = new Set(), durationMs = 260){
     el.style.transform = `translate(${dx}px, ${dy}px)`;
     anims.push(el);
   }
-
   if(anims.length === 0) return;
 
   requestAnimationFrame(() => {
@@ -422,7 +498,7 @@ function attachCubesToSlots(cubes, slots){
   }
 }
 
-// ---------- Destination slot creation ----------
+// ---- Destination helpers (unchanged) ----
 function createNewOnesFrameSlots(){
   const frameEl = document.createElement('div');
   frameEl.className = 'frame ones';
@@ -430,7 +506,6 @@ function createNewOnesFrameSlots(){
   for(let i=0;i<10;i++){
     const slot = document.createElement('div');
     slot.className = 'slot';
-    slot.dataset.kind = 'one-slot';
     frameEl.appendChild(slot);
     slots.push(slot);
   }
@@ -445,7 +520,6 @@ function createNewTensFrameSlots(){
   for(let i=0;i<10;i++){
     const slot = document.createElement('div');
     slot.className = 'ten-slot';
-    slot.dataset.kind = 'ten-slot';
     frameEl.appendChild(slot);
     slots.push(slot);
   }
@@ -456,7 +530,6 @@ function createNewTensFrameSlots(){
 function createDestinationTenStickSlotsInSpecificTenSlot(tenSlotEl){
   const stickEl = document.createElement('div');
   stickEl.className = 'ten-stick';
-
   const slots = [];
   for(let i=0;i<10;i++){
     const s = document.createElement('div');
@@ -468,7 +541,7 @@ function createDestinationTenStickSlotsInSpecificTenSlot(tenSlotEl){
   return slots;
 }
 
-// ---------- Lookups ----------
+// ---- Lookups (unchanged) ----
 function findStickById(stickId){
   for(let f=0; f<state.tensFrames.length; f++){
     for(let i=0; i<state.tensFrames[f].length; i++){
@@ -484,7 +557,7 @@ function findHundredById(hundredId){
   return idx === -1 ? null : { index: idx, hundred: state.hundreds[idx] };
 }
 
-// ---------- Actions ----------
+// ---- Actions (UNCHANGED from your current working version) ----
 async function composeOnesFrameToTen(frameIndex){
   const frameCubes = state.onesFrames[frameIndex];
   if(!frameCubes || frameCubes.length !== 10) return;
@@ -506,18 +579,14 @@ async function composeOnesFrameToTen(frameIndex){
   await animateCubesToSlots(frameCubes, destSlots);
   attachCubesToSlots(frameCubes, destSlots);
 
-  // Update state
   state.onesFrames.splice(frameIndex, 1);
   if(state.onesFrames.length === 0) state.onesFrames.push([]);
 
   const newStick = makeStick(frameCubes.slice().sort((a,b)=>a.id-b.id));
-
-  // Append stick (we'll canonicalize right after)
   if(state.tensFrames.length === 0) state.tensFrames.push([]);
   state.tensFrames[state.tensFrames.length - 1].push(newStick);
-  canonicalizeTensFrames(); // ✅ NEW
+  canonicalizeTensFrames();
 
-  // Animate everything else sliding into canonical place
   const before = captureCubeRects();
   renderAll();
   const after = captureCubeRects();
@@ -542,11 +611,9 @@ async function decomposeTenToOnes(stickId){
   await animateCubesToSlots(cubes, destSlots);
   attachCubesToSlots(cubes, destSlots);
 
-  // Update tens: remove stick
   state.tensFrames[found.frameIndex].splice(found.slotIndex, 1);
-  canonicalizeTensFrames(); // ✅ NEW: repack tens into full frames
+  canonicalizeTensFrames();
 
-  // Append new ones frame with these cubes
   state.onesFrames.push(cubes.slice().sort((a,b)=>a.id-b.id));
   if(state.onesFrames.length === 0) state.onesFrames = [[]];
 
@@ -592,10 +659,8 @@ async function composeTensFrameToHundred(frameIndex){
   await animateCubesToSlots(cubes, targetSlots);
   attachCubesToSlots(cubes, targetSlots);
 
-  // Update state: remove that tens frame
   state.tensFrames.splice(frameIndex, 1);
-  canonicalizeTensFrames(); // ✅ NEW: repack remaining tens
-
+  canonicalizeTensFrames();
   state.hundreds.push(makeHundred(frameSticks));
 
   const before = captureCubeRects();
@@ -614,7 +679,7 @@ async function decomposeHundredToTens(hundredId){
   setLocked(true);
 
   const hundred = found.hundred;
-  const sticks = hundred.sticks.slice(); // 10 sticks
+  const sticks = hundred.sticks.slice();
 
   renderTensFrames();
   const tenSlots = createNewTensFrameSlots();
@@ -634,12 +699,11 @@ async function decomposeHundredToTens(hundredId){
   await animateCubesToSlots(cubes, allTargetSlots);
   attachCubesToSlots(cubes, allTargetSlots);
 
-  // Update: remove hundred, add its sticks to tens, then canonicalize
   state.hundreds.splice(found.index, 1);
 
   if(state.tensFrames.length === 0) state.tensFrames = [[]];
   state.tensFrames.push(sticks);
-  canonicalizeTensFrames(); // ✅ NEW: this is the big one for your 579 torture test
+  canonicalizeTensFrames();
 
   const before = captureCubeRects();
   renderAll();
