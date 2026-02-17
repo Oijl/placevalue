@@ -20,10 +20,18 @@
       <span id="lockBadge" class="lock-badge hidden">Animating…</span>
     </div>
 
+    <!-- PROMINENT NUMBER DISPLAY -->
     <div class="readout">
-      <div id="valueText" class="value-text">0 hundreds, 0 tens, 0 ones</div>
+      <div class="repr">
+        <div id="standardText" class="repr-standard">0</div>
+        <div id="htoText" class="repr-hto">0 hundreds, 0 tens, 0 ones</div>
+        <div id="expandedText" class="repr-expanded">0 + 0 + 0</div>
+      </div>
+
+      <div id="actionText" class="action-text hidden" aria-live="polite"></div>
+
       <div id="helpText" class="help-text">
-        Compose: click a full frame. Decompose: click a ten-stick or a hundred.
+        Compose: hover a full frame, then click it. Decompose: hover a ten-stick or a hundred, then click it.
       </div>
     </div>
   </header>
